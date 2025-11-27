@@ -119,7 +119,7 @@ export default (opts: BaseCommandOptions) => {
         }
       }
 
-      // Calculate and format elapsed time
+      // Calculate and format elapsed time e
       const endTime = performance.now();
       const elapsedTimeMs = endTime - startTime;
       const formattedTime =
