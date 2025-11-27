@@ -29,7 +29,7 @@ export default (opts: BaseCommandOptions) => {
   command.option('--debug', 'Build the binary with debug information', false);
   command.option(
     '--platform [platforms...]',
-    'Platform-architecture combinations (e.g., darwin-arm64 linux-amd64)',
+    'Platform-architecture combinations there (e.g., darwin-arm64 linux-amd64)',
     [],
   );
   command.option('--all-platforms', 'Build for all supported platforms', false);
