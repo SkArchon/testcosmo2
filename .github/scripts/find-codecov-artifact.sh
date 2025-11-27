@@ -26,14 +26,46 @@ if [ -n "$MERGE_COMMIT_SHA" ]; then
   echo "Merge commit SHA provided: $MERGE_COMMIT_SHA"
   echo "Looking up PR for merge commit..."
   
-  # Search for PRs that were merged with this commit
-  pr_json=$(curl -sf \
-    -H "Authorization: Bearer $GITHUB_TOKEN" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$REPO/commits/$MERGE_COMMIT_SHA/pulls")
+  # Search for PRs that were merged with this commit (with retry logic for timing issues)
+  max_retries=5
+  retry_count=0
+  pr_json=""
+  backoff_delays=(3 9 15 15)  # Backoff delays in seconds
   
-  if [ $? -ne 0 ]; then
-    echo "Failed to fetch PR information for merge commit" >&2
+  while [ $retry_count -lt $max_retries ]; do
+    pr_json=$(curl -sf \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/$REPO/commits/$MERGE_COMMIT_SHA/pulls")
+    
+    if [ $? -ne 0 ]; then
+      echo "Failed to fetch PR information for merge commit" >&2
+      exit 1
+    fi
+    
+    # Check if we got any PRs
+    pr_count=$(echo "$pr_json" | jq 'length')
+    if [ "$pr_count" -gt 0 ]; then
+      echo "Found $pr_count PR(s) for merge commit"
+      break
+    fi
+    
+    retry_count=$((retry_count + 1))
+    if [ $retry_count -lt $max_retries ]; then
+      # Get the appropriate backoff delay
+      delay_index=$((retry_count - 1))
+      if [ $delay_index -ge ${#backoff_delays[@]} ]; then
+        delay_index=$((${#backoff_delays[@]} - 1))
+      fi
+      delay=${backoff_delays[$delay_index]}
+      echo "No PRs found yet (attempt $retry_count/$max_retries), retrying in $delay seconds..."
+      sleep $delay
+    fi
+  done
+  
+  if [ -z "$pr_json" ] || [ "$(echo "$pr_json" | jq 'length')" -eq 0 ]; then
+    echo "No PRs found for merge commit after $max_retries attempts" >&2
+    echo "This might be a direct push (not from a PR merge)" >&2
     exit 1
   fi
   
