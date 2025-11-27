@@ -119,13 +119,13 @@ export default (opts: BaseCommandOptions) => {
         }
       }
 
-      // Calculate and format elapsed time e
+      // Calculate and format elapsed time
       const endTime = performance.now();
       const elapsedTimeMs = endTime - startTime;
       const formattedTime =
         elapsedTimeMs > 1000 ? `${(elapsedTimeMs / 1000).toFixed(2)}s` : `${Math.round(elapsedTimeMs)}ms`;
 
-      renderResultTree(spinner, 'Plugin built successfully e!', true, pluginName, {
+      renderResultTree(spinner, 'Plugin built successfully!', true, pluginName, {
         output: pluginDir,
         platforms: platforms.join(', '),
         env: `${os.platform()} ${os.arch()}`,
