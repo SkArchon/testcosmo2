@@ -4,20 +4,66 @@
 # 
 # Required environment variables:
 #   REPO: GitHub repository (e.g., owner/repo)
-#   HEAD_SHA: The PR head commit SHA
 #   CURRENT_RUN_ID: The current workflow run ID
 #   ARTIFACT_NAME_PATTERN: Pattern to match artifact names (e.g., "codecov-pr-build")
 #   WORKFLOW_PATHS: Comma-separated list of workflow file paths to filter by (e.g., ".github/workflows/router-ci.yaml,.github/workflows/cli-ci.yaml")
 #   GITHUB_TOKEN: Required for API authentication
 #
+# Optional environment variables:
+#   HEAD_SHA: The PR head commit SHA (if running in PR context)
+#   MERGE_COMMIT_SHA: The merge commit SHA (if running after merge to main)
+#
 # Outputs (to $GITHUB_OUTPUT):
 #   artifacts_json: JSON array of objects with run_id, artifact_id, and artifact_name
 #
 REPO="${REPO:?REPO environment variable is required}"
-HEAD_SHA="${HEAD_SHA:?HEAD_SHA environment variable is required}"
 CURRENT_RUN_ID="${CURRENT_RUN_ID:?CURRENT_RUN_ID environment variable is required}"
 ARTIFACT_NAME_PATTERN="${ARTIFACT_NAME_PATTERN:?ARTIFACT_NAME_PATTERN environment variable is required}"
 WORKFLOW_PATHS="${WORKFLOW_PATHS:?WORKFLOW_PATHS environment variable is required}"
+
+# If MERGE_COMMIT_SHA is provided, look up the PR to get HEAD_SHA
+if [ -n "$MERGE_COMMIT_SHA" ]; then
+  echo "Merge commit SHA provided: $MERGE_COMMIT_SHA"
+  echo "Looking up PR for merge commit..."
+  
+  # Search for PRs that were merged with this commit
+  pr_json=$(curl -sf \
+    -H "Authorization: Bearer $GITHUB_TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$REPO/commits/$MERGE_COMMIT_SHA/pulls")
+  
+  if [ $? -ne 0 ]; then
+    echo "Failed to fetch PR information for merge commit" >&2
+    exit 1
+  fi
+  
+  # Extract the head SHA from the PR that was actually merged (state: closed, merged_at != null)
+  # We prefer the PR whose merge_commit_sha matches our MERGE_COMMIT_SHA
+  HEAD_SHA=$(echo "$pr_json" | jq -r --arg merge_sha "$MERGE_COMMIT_SHA" '
+    map(select(.state == "closed" and .merged_at != null))
+    | map(select(.merge_commit_sha == $merge_sha))
+    | .[0].head.sha
+  ')
+  
+  # If no exact match, fall back to the first merged PR
+  if [ -z "$HEAD_SHA" ] || [ "$HEAD_SHA" = "null" ]; then
+    echo "No exact merge commit match, trying first merged PR..."
+    HEAD_SHA=$(echo "$pr_json" | jq -r '
+      map(select(.state == "closed" and .merged_at != null))
+      | .[0].head.sha
+    ')
+  fi
+  
+  if [ -z "$HEAD_SHA" ] || [ "$HEAD_SHA" = "null" ]; then
+    echo "No merged PR found for commit $MERGE_COMMIT_SHA" >&2
+    echo "PR JSON: $pr_json" >&2
+    exit 1
+  fi
+  
+  echo "Found PR head SHA: $HEAD_SHA"
+else
+  HEAD_SHA="${HEAD_SHA:?HEAD_SHA environment variable is required when MERGE_COMMIT_SHA is not provided}"
+fi
 
 echo "Head SHA: $HEAD_SHA"
 echo "Current run id: $CURRENT_RUN_ID"

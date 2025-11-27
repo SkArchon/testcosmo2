@@ -11,6 +11,10 @@ inputs:
   override-commit:
     description: 'Commit SHA to override in Codecov'
     required: true
+  merge-commit-sha:
+    description: 'Merge commit SHA to look up the PR and find head SHA'
+    required: false
+    default: ''
   codecov-token:
     description: 'Codecov token for uploading'
     required: true
@@ -28,6 +32,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        MERGE_COMMIT_SHA: ${{ inputs.merge-commit-sha }}
         CURRENT_RUN_ID: ${{ github.run_id }}
         ARTIFACT_NAME_PATTERN: codecov
         WORKFLOW_PATHS: ${{ inputs.workflow-paths }}
